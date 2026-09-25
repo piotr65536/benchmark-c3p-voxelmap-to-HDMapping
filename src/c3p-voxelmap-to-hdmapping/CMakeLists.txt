@@ -15,6 +15,7 @@ find_package(catkin REQUIRED
         roscpp
         sensor_msgs
         rosbag
+        rosgraph_msgs
         livox_ros_driver
         pcl_ros
 )

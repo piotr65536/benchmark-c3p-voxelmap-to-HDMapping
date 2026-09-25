@@ -74,7 +74,7 @@ docker run -it --rm \
     tmux send-keys -t '"$TMUX_SESSION"' '\''sleep 5
 source /opt/ros/noetic/setup.bash
 source /ros_ws/devel/setup.bash
-roslaunch c3p_voxelmap mapping_velodyne.launch use_sim_time:=true
+roslaunch c3p_voxelmap mapping_velodyne.launch
 '\'' C-m
 
     # ---------- PANEL 2: rosbag record ----------
@@ -83,7 +83,7 @@ roslaunch c3p_voxelmap mapping_velodyne.launch use_sim_time:=true
 source /opt/ros/noetic/setup.bash
 source /ros_ws/devel/setup.bash
 echo "[record] start"
-rosbag record /cloud_registered /aft_mapped_to_init -O '"$BAG_OUTPUT_CONTAINER/$RECORDED_BAG_NAME"'
+rosbag record /cloud_registered /aft_mapped_to_init /clock -O '"$BAG_OUTPUT_CONTAINER/$RECORDED_BAG_NAME"'
 echo "[record] exit"
 '\'' C-m
 

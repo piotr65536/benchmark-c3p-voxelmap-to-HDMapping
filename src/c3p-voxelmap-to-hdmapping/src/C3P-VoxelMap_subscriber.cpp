@@ -16,7 +16,9 @@
 #include "ros/ros.h"
 #include <rosbag/view.h>
 #include <pcl_ros/point_cloud.h>
+#include <rosgraph_msgs/Clock.h>
 #include "laz_writer.hpp"
+#include "bag_time_translation.hpp"
 
 
 struct TrajectoryPose
@@ -165,9 +167,22 @@ int main(int argc, char **argv)
 
     rosbag::Bag bag;
     bag.open(input_bag, rosbag::bagmode::Read);  
-    rosbag::View view(bag); 
+    rosbag::View view(bag);
+
+    // Inputs for translating the result into bag time (see bag_time_translation.hpp).
+    std::vector<int64_t> clock_wall_minus_bag_ns;  // per /clock message: receive time - payload
+    std::vector<int64_t> odom_stamp_minus_receive_ns;  // per odometry message: header stamp - receive time
 
     for (const rosbag::MessageInstance& m : view) {
+        if (m.getTopic() == "/clock") {
+            rosgraph_msgs::Clock::ConstPtr clock_msg = m.instantiate<rosgraph_msgs::Clock>();
+            if (clock_msg) {
+                clock_wall_minus_bag_ns.push_back(static_cast<int64_t>(m.getTime().toNSec()) -
+                                                  static_cast<int64_t>(clock_msg->clock.toNSec()));
+            }
+            continue;
+        }
+
         if (m.getTopic() == "/cloud_registered") {
             ROS_INFO("Received message on topic: /cloud_registered");
 
@@ -243,6 +258,8 @@ int main(int argc, char **argv)
             uint64_t sec_in_ms = static_cast<uint64_t>(odom_msg->header.stamp.sec) * 1'000'000'000ULL;
             uint64_t ns_in_ms = static_cast<uint64_t>(odom_msg->header.stamp.nsec);
             pose.timestamp_ns = sec_in_ms + ns_in_ms;
+            odom_stamp_minus_receive_ns.push_back(static_cast<int64_t>(pose.timestamp_ns) -
+                                                  static_cast<int64_t>(m.getTime().toNSec()));
 
             pose.x_m = x;
             pose.y_m = y;
@@ -271,6 +288,26 @@ int main(int argc, char **argv)
 
             ROS_INFO("Added position to trajectory: x=%.3f, y=%.3f, z=%.3f", x, y, z);
         }
+    }
+
+    // C3P-VoxelMap stamps its outputs with wall-clock time. Its clock is left
+    // alone; the result is translated into bag time here, so it can be
+    // aligned with the ground truth. Poses and points are shifted by the same
+    // constant, which keeps their association below intact.
+    const BagTimeShift shift = decide_bag_time_shift(clock_wall_minus_bag_ns, odom_stamp_minus_receive_ns);
+    if (shift.apply) {
+        for (auto &p : trajectory) {
+            p.timestamp_ns = static_cast<uint64_t>(static_cast<int64_t>(p.timestamp_ns) - shift.offset_ns);
+        }
+        for (auto &pt : points_global) {
+            if (pt.timestamp != 0) {
+                pt.timestamp -= static_cast<double>(shift.offset_ns);
+            }
+        }
+        std::cout << "Bag time: " << shift.reason << ", shifted by " << shift.offset_ns
+                  << " ns (median of " << clock_wall_minus_bag_ns.size() << " /clock messages)" << std::endl;
+    } else {
+        std::cout << "Bag time: " << shift.reason << std::endl;
     }
 
     // std::cout << "start transforming point to global coordinate system" << std::endl;
@@ -323,7 +360,12 @@ int main(int argc, char **argv)
     // remaining pc
     std::cout << "reamaining points: " << chunk.size() << std::endl;
 
-    if (chunk.size() > 1000000)
+    // Keep the remaining points as a final chunk whenever there are any. The
+    // old threshold (> 1,000,000) assumed dense per-scan clouds: C3P-VoxelMap
+    // publishes a downsampled cloud of every fifth point, so a whole run can
+    // stay below it, which left no chunk at all and therefore no trajectory.
+    // Same fix as in benchmark-SR-LIO-to-HDMapping.
+    if (!chunk.empty())
     {
         chunks_pc.push_back(chunk);
     }
