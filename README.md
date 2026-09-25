@@ -2,7 +2,7 @@
 
 ## Hint
 
-Please change branch to [Bunker-DVI-Dataset-reg-1](https://github.com/MapsHD/benchmark-VoxelMap-to-HDMapping/tree/Bunker-DVI-Dataset-reg-1) for quick experiment.  
+Please change branch to [Bunker-DVI-Dataset-reg-1](https://github.com/MapsHD/benchmark-c3p-voxelmap-to-HDMapping/tree/Bunker-DVI-Dataset-reg-1) for quick experiment.  
 
 ## Intended use 
 
@@ -23,7 +23,7 @@ Clone the repo
 ```shell
 mkdir -p /test_ws/src
 cd /test_ws/src
-git clone https://github.com/marcinmatecki/benchmark-C3P-VoxelMap-to-HDMapping.git --recursive
+git clone https://github.com/MapsHD/benchmark-C3P-VoxelMap-to-HDMapping.git --recursive
 cd ..
 catkin_make
 ```
